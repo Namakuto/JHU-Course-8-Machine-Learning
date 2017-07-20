@@ -1,0 +1,186 @@
+---
+title: "Prediction Model Creation and Assessment on a HAR Weight Lifting Excercises Dataset"
+author: "Namakuto"
+date: "July 20, 2017"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+## Synopsis
+
+Various, human activity recognition (HAR) data on weight-lifting excercises were analyzed to generate a predictive model on (excercise) performance quality. Sets of 10 repetitions for each excercise were done in 5 letter-graded fashions: A grade of "A" corresponded to a perfect set, whereas "B", "C", "D" and "E" grades corresponded to sets demonstrating specific, common errors. 
+
+Grades were recorded as a `classe` variable in the dataset. The goal of this project was to develop a model for predicting the `classe` grade of an excercise entry, within a test set data.frame of the data.
+
+Further information is available at http://groupware.les.inf.puc-rio.br/har.
+
+---
+
+## Data Pre-Processing
+
+Lets start by loading the data and set our working directory. We'll also convert some classic Excel/R "NA" strings.
+```{r setup, warning=FALSE, message=FALSE, results='hide'}
+train<-read.csv("pmltraining.csv", na.strings=c("#DIV/0!", "NA", "")) 
+test<-read.csv("pmltesting.csv", na.strings=c("#DIV/0!", "NA", ""))
+```
+
+Let's also preview the data to see what it looks like
+```{r prevdata}
+str(train, list.len=15)
+```
+
+Interesting. There's variables that may seem unnecessary, but for now, let's split up our working data (`train`) set and see where things go. We'll do a 40:60 partition.
+```{r partitiontrain, warning=FALSE, message=FALSE}
+library(caret)
+part<-createDataPartition(y=train$classe, p=0.60, list=FALSE)
+train1<-train[part,]
+train2<-train[-part,]
+```
+
+Trying to initially build some correlation tests and matrices were now giving us some trouble, on the data as is *(not pictured)*-- let's go back to remove the unnecessary columns as well as "NA"-containing columns.
+```{r reducecolumnsandNA}
+numeric.col<-train1[,8:160]
+numeric.col<-numeric.col[ , apply(numeric.col, 2, function(x) !any(is.na(x)))]
+```
+
+---
+
+### Data Processing and Analysis
+
+The [original study outline](http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf) recommends using **correlation factor selection (CFS)** to reduce variable possibilities. Let's install `FSelector` to use its `cfs` function, which will return the names of the variables most "correlated" to our categorical predictor. 
+```{r selectorlib, warning=FALSE, message=FALSE}
+library(FSelector); best.correlation<-cfs(classe~., data=numeric.col)
+best.correlation
+```
+
+Selector can also show us the information gain of each variable~classe, telling us which variables are most influential (important) out of the rest. The information gain is a sense of how easily/"cleanly" random trees/"yes-no" forks" of the data can be split according to the attribute (variable). 
+```{r gainratiolist}
+gain<-information.gain(classe~., data=numeric.col)
+gain$names<-row.names(gain); row.names(gain)<-NULL
+list.gain<-gain[order(gain$attr_importance, decreasing=TRUE),]; list.gain[1:10,]
+```
+
+roll_belt, yaw_belt, and pitch_belt look promising so far. Let's preview plots on our two "best" options according to our `best.correlation` (`cfs`) list from before.
+```{r plotbestcorrelates, fig.align="center"}
+par(mar=c(4,4,2,1), mfcol=c(1,2))
+plot(roll_belt~classe, data=numeric.col, main="roll_belt vs classe", cex.main=1)
+plot(pitch_belt~classe, data=numeric.col, main="pitch_belt vs classe", cex.main=1)
+```
+
+Hmm. Highly variant. Let's go back to the tree-based generate. We'll try plotting the importance of each variable according to a random forest.  
+```{r forestplot, warning=FALSE, message=FALSE, fig.align="center"}
+library(randomForest)
+set.seed(1)
+forest<-randomForest(classe~., data=numeric.col, importance=TRUE, ntree=50)
+varImpPlot(forest, cex=0.7) 
+```
+
+The data seems to match our order in information gain well. Some variables seem like they may inter-correlate, however-- let's run a correlation matrix.
+```{r firstintercorrelate}
+cor.mat<-cor(numeric.col[,1:52], use="pairwise.complete.obs")
+diag(cor.mat)<-0; max(abs(cor.mat)) # Max is 0.992...
+```
+Wow, *way* too high.  
+
+Let's add a cutoff for >=0.7 correlation and remove variables that inter-correlate within this threshold.
+
+```{r correlationthreshold}
+cor.matnew<-findCorrelation(cor.mat, cutoff = 0.7, names=FALSE) # Returns columns 
+numeric.col2<-numeric.col[,-cor.matnew] # Reduce columns
+```
+
+Let's look at a plot of the new variable importance in the correlation-reduced dataset.
+```{r newforestplot, fig.align="center"}
+set.seed(2)
+forest2<-randomForest(classe~., data=numeric.col2, importance=TRUE, ntree=50)
+varImpPlot(forest2, cex=0.7) 
+```
+Still looks good.
+
+We'll now check for correlation again between the new variables~classe. We'll use the `cfs` function to return a list on the top correlates again.
+```{r newbestcorrelates}
+best.correlation2<-cfs(classe~., data=numeric.col2) # new correlations
+best.indices2<-grep(paste(best.correlation2, collapse = "|"), names(numeric.col2), value=FALSE)
+best.correlation2
+```
+The variable names here seem to correspond well with those in our variable importance plot, directly above.  
+
+They also seem to do well on an `rpart`"-ed" decision tree plot within our multicorrelate-reduced dataset.  
+```{r ultimatetreeplot, warning=FALSE, message=FALSE, fig.align="center"}
+library(rpart); library(rpart.plot)
+tree.plot<-rpart(classe~., method="class", data=numeric.col2)
+prp(tree.plot, type=0, ycompress=FALSE, compress=TRUE, branch=1, cex=0.5, Margin = -0.05)
+```
+
+We're almost ready to build our model. Lets just check for inter-correlation again, in case, amongst our "best" list.
+```{r correlationcheckagain}
+numeric.colbest<-numeric.col2[,best.indices2]
+cor.mat2<-cor(numeric.colbest)
+diag(cor.mat2)<-0; max(abs(cor.mat2)) # 0.34
+```
+Wow, really low-- Success! Let's proceed.
+
+---
+
+## Modelling
+
+We'll enable multi-core processing to train our model.
+
+Let's train `classe` against every variable in our `best.correlation2` list. We can feel comfortable using this `best.correlation2` list as it's highly similar to that of our variable importance list. 
+It'll also help us pick a (base) number for how many variables to include in our predictive model.
+```{r modelmaking, warning=FALSE, message=FALSE, eval=FALSE}
+library(doParallel)
+cl<-makeCluster(2)
+registerDoParallel(cl)
+mymodel<-train(classe~gyros_belt_z+magnet_belt_y+gyros_arm_y+magnet_arm_x+
+               roll_dumbbell+gyros_dumbbell_y+magnet_dumbbell_z+roll_forearm+pitch_forearm,
+             
+             data=numeric.col2, method="rf", 
+             trControl=trainControl(method="cv", number=2),
+             prox=TRUE, verbose=TRUE, ntree=100)
+stopCluster(cl)
+```
+
+We can save the model as so:
+```{r modelsave, message=FALSE, warning=FALSE, eval=FALSE}
+saveRDS(mymodel, "mymodel.rds") 
+```
+
+And read it back in:
+```{r modelload, message=FALSE, warning=FALSE}
+mymodel<-readRDS("mymodel.rds")
+```
+
+Let's now run our model on the remaining 40% partition of the data and see how it holds. We'll generate a **confusion matrix** to **assess accuracy**.
+```{r firstconfusionmat}
+pred<-predict(mymodel, newdata=train2)
+con<-confusionMatrix(pred, train2$classe); con 
+```
+We have an `r con$overall[1]*100`% accuracy, which is high!
+
+---
+
+### Cross-Validation Report on our Out-of-Sample Error Rate 
+
+Our model is already cross-validated. Our error rate is `r (1-con$overall[1])*100`%.
+
+---
+
+### Testing the Model on the final "Test" set
+
+Finally, we can test our model on the unknown test set. We use the set to predict  `classe` values for each observation in the test set (lacking a classe variable by default). 
+```{r finalconfusionmat}
+newpred<-predict(mymodel,newdata=test)
+test$classe<-newpred # 100% correct!
+```
+After filling out the corresponding Coursera quiz as part of this report, our model gave us **100% correct** results.
+
+---
+
+## Conclusion
+
+In conclusion, the model to predict variables that would correlate highly with `classe` was highly accurate. Several variables could have been chosen, but a set of 9 were ultimately picked based on their correlation with `classe`. Randomforest-based variable importance was also considered to help narrow down variables. Future predictive algorithms may want to try different multicorrelates.
+
+
+
