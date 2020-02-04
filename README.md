@@ -1,3 +1,5 @@
-### Refer to the "predictreport" files within this repo for the assignment.
+### "Predictreport" within this repo contains the PLOTS (images) made from this assignment.
 
-Part of the "Data Science" Coursera Specialization, Course 8, from John Hopkins
+Rest of the files in this folders are pure code itself.
+
+Part of the "Data Science" Coursera Specialization, Course 8, from John Hopkins.
