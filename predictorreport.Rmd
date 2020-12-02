@@ -30,10 +30,10 @@ Let's also preview the data to see what it looks like
 str(train, list.len=15)
 ```
 
-Interesting. There's variables that may seem unnecessary, but for now, let's split up our working data (`train`) set and see where things go. We'll do a 40:60 partition.
+Interesting. There's variables that may seem unnecessary, but for now, let's split up our working data (`train`) set and see where things go. We'll do a 20:80 partition.
 ```{r partitiontrain, warning=FALSE, message=FALSE}
 library(caret)
-part<-createDataPartition(y=train$classe, p=0.60, list=FALSE)
+part<-createDataPartition(y=train$classe, p=0.80, list=FALSE)
 train1<-train[part,]
 train2<-train[-part,]
 ```
@@ -152,7 +152,7 @@ And read it back in:
 mymodel<-readRDS("mymodel.rds")
 ```
 
-Let's now run our model on the remaining 40% partition of the data and see how it holds. We'll generate a **confusion matrix** to **assess accuracy**.
+Let's now run our model on the remaining 20% partition of the data and see how it holds. We'll generate a **confusion matrix** to **assess accuracy**.
 ```{r firstconfusionmat}
 pred<-predict(mymodel, newdata=train2)
 con<-confusionMatrix(pred, train2$classe); con 

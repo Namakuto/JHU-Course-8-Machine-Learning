@@ -1,6 +1,11 @@
-# Prediction Model Creation and Assessment on a HAR Weight Lifting Excercises Dataset
-Namakuto  
-July 20, 2017  
+---
+title: "Prediction Model Creation and Assessment on a HAR Weight Lifting Excercises Dataset"
+author: "Namakuto"
+date: "July 20, 2017"
+output: 
+  html_document: 
+    keep_md: yes
+---
 
 ## Synopsis
 
@@ -47,11 +52,11 @@ str(train, list.len=15)
 ##   [list output truncated]
 ```
 
-Interesting. There's variables that may seem unnecessary, but for now, let's split up our working data (`train`) set and see where things go. We'll do a 40:60 partition.
+Interesting. There's variables that may seem unnecessary, but for now, let's split up our working data (`train`) set and see where things go. We'll do a 20:80 partition.
 
 ```r
 library(caret)
-part<-createDataPartition(y=train$classe, p=0.60, list=FALSE)
+part<-createDataPartition(y=train$classe, p=0.80, list=FALSE)
 train1<-train[part,]
 train2<-train[-part,]
 ```
@@ -76,8 +81,8 @@ best.correlation
 
 ```
 ## [1] "roll_belt"         "pitch_belt"        "yaw_belt"         
-## [4] "magnet_belt_z"     "gyros_arm_x"       "magnet_arm_x"     
-## [7] "gyros_dumbbell_y"  "magnet_dumbbell_y" "pitch_forearm"
+## [4] "magnet_arm_x"      "gyros_dumbbell_y"  "magnet_dumbbell_y"
+## [7] "pitch_forearm"
 ```
 
 Selector can also show us the information gain of each variable~classe, telling us which variables are most influential (important) out of the rest. The information gain is a sense of how easily/"cleanly" random trees/"yes-no" forks" of the data can be split according to the attribute (variable). 
@@ -90,16 +95,16 @@ list.gain<-gain[order(gain$attr_importance, decreasing=TRUE),]; list.gain[1:10,]
 
 ```
 ##    attr_importance             names
-## 3        0.6084123          yaw_belt
-## 2        0.4761543        pitch_belt
-## 1        0.4542267         roll_belt
-## 38       0.2917422 magnet_dumbbell_y
-## 40       0.2729154      roll_forearm
-## 10       0.2489274      accel_belt_z
-## 37       0.2427627 magnet_dumbbell_x
-## 13       0.2238691     magnet_belt_z
-## 39       0.2215895 magnet_dumbbell_z
-## 36       0.2156878  accel_dumbbell_z
+## 3        0.6231309          yaw_belt
+## 2        0.4683356        pitch_belt
+## 1        0.4558729         roll_belt
+## 38       0.2885066 magnet_dumbbell_y
+## 40       0.2704598      roll_forearm
+## 10       0.2497909      accel_belt_z
+## 37       0.2484908 magnet_dumbbell_x
+## 39       0.2292653 magnet_dumbbell_z
+## 36       0.2257112  accel_dumbbell_z
+## 13       0.2215921     magnet_belt_z
 ```
 
 roll_belt, yaw_belt, and pitch_belt look promising so far. Let's preview plots on our two "best" options according to our `best.correlation` (`cfs`) list from before.
@@ -131,7 +136,7 @@ diag(cor.mat)<-0; max(abs(cor.mat)) # Max is 0.992...
 ```
 
 ```
-## [1] 0.9919739
+## [1] 0.9919962
 ```
 Wow, *way* too high.  
 
@@ -188,7 +193,7 @@ diag(cor.mat2)<-0; max(abs(cor.mat2)) # 0.34
 ```
 
 ```
-## [1] 0.3439764
+## [1] 0.3429257
 ```
 Wow, really low-- Success! Let's proceed.
 
@@ -226,7 +231,7 @@ And read it back in:
 mymodel<-readRDS("mymodel.rds")
 ```
 
-Let's now run our model on the remaining 40% partition of the data and see how it holds. We'll generate a **confusion matrix** to **assess accuracy**.
+Let's now run our model on the remaining 20% partition of the data and see how it holds. We'll generate a **confusion matrix** to **assess accuracy**.
 
 ```r
 pred<-predict(mymodel, newdata=train2)
@@ -238,41 +243,42 @@ con<-confusionMatrix(pred, train2$classe); con
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 2213   20    6   10    0
-##          B    7 1470   18    3    5
-##          C    6   24 1332   18    1
-##          D    3    3   11 1251    7
-##          E    3    1    1    4 1429
+##          A 1112    3    1    3    1
+##          B    2  755    5    0    1
+##          C    1    1  674    7    1
+##          D    1    0    3  633    0
+##          E    0    0    1    0  718
 ## 
 ## Overall Statistics
 ##                                           
-##                Accuracy : 0.9808          
-##                  95% CI : (0.9775, 0.9837)
+##                Accuracy : 0.9921          
+##                  95% CI : (0.9888, 0.9946)
 ##     No Information Rate : 0.2845          
-##     P-Value [Acc > NIR] : < 2e-16         
+##     P-Value [Acc > NIR] : < 2.2e-16       
 ##                                           
-##                   Kappa : 0.9757          
-##  Mcnemar's Test P-Value : 0.03951         
+##                   Kappa : 0.99            
+##                                           
+##  Mcnemar's Test P-Value : NA              
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9915   0.9684   0.9737   0.9728   0.9910
-## Specificity            0.9936   0.9948   0.9924   0.9963   0.9986
-## Pos Pred Value         0.9840   0.9780   0.9645   0.9812   0.9937
-## Neg Pred Value         0.9966   0.9924   0.9944   0.9947   0.9980
+## Sensitivity            0.9964   0.9947   0.9854   0.9844   0.9958
+## Specificity            0.9971   0.9975   0.9969   0.9988   0.9997
+## Pos Pred Value         0.9929   0.9895   0.9854   0.9937   0.9986
+## Neg Pred Value         0.9986   0.9987   0.9969   0.9970   0.9991
 ## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
-## Detection Rate         0.2821   0.1874   0.1698   0.1594   0.1821
-## Detection Prevalence   0.2866   0.1916   0.1760   0.1625   0.1833
-## Balanced Accuracy      0.9925   0.9816   0.9831   0.9846   0.9948
+## Detection Rate         0.2835   0.1925   0.1718   0.1614   0.1830
+## Detection Prevalence   0.2855   0.1945   0.1744   0.1624   0.1833
+## Balanced Accuracy      0.9968   0.9961   0.9911   0.9916   0.9978
 ```
-We have an 98.0754525% accuracy, which is high!
+We have an 99.2097884% accuracy, which is high!
 
 ---
 
 ### Cross-Validation Report on our Out-of-Sample Error Rate 
 
-Our model is already cross-validated. Our error rate is 1.9245475%.
+Our model is already cross-validated. Our error rate is 0.7902116%.
 
 ---
 

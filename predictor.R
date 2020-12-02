@@ -1,17 +1,16 @@
 library(caret); library(FSelector); library(randomForest)
-setwd("~/=== LU 3211 Biostats/COURSERA/Course 8 - Machine Learning")
+setwd("~/== LU 3211 Biostats/COURSERA/Course 8 - Machine Learning")
 train<-read.csv("pmltraining.csv", na.strings=c("#DIV/0!", "NA", "")) 
 test<-read.csv("pmltesting.csv", na.strings=c("#DIV/0!", "NA", ""))
 
-part<-createDataPartition(y=train$classe, p=0.60, list=FALSE)
+part<-createDataPartition(y=train$classe, p=0.80, list=FALSE)
 train1<-train[part,]
 train2<-train[-part,]
 
 #///////// Trying caret package
 
 numeric.col<-train1[,8:160] # Exclude non-numerics
-numeric.col<-numeric.col[ , apply(numeric.col, 2, function(x) !any(is.na(x)))]
-#REMOVE NA's
+numeric.col<-numeric.col[ , apply(numeric.col, 2, function(x) !any(is.na(x)))] #REMOVE NA's
 
 best.correlation<-cfs(classe~., data=numeric.col) # Let's try correlations first
 
@@ -64,6 +63,7 @@ diag(cor.mat2)<-0; max(abs(cor.mat2)) # Max is 0.775... high! Let's reduce our c
 library(doParallel)
 cl<-makeCluster(2)
 registerDoParallel(cl)
+
 mymodel<-train(classe~gyros_belt_z+magnet_belt_y+gyros_arm_y+magnet_arm_x+
                roll_dumbbell+gyros_dumbbell_y+magnet_dumbbell_z+roll_forearm+pitch_forearm,
              
@@ -72,14 +72,18 @@ mymodel<-train(classe~gyros_belt_z+magnet_belt_y+gyros_arm_y+magnet_arm_x+
              prox=TRUE, verbose=TRUE, ntree=100)
 stopCluster(cl)
 saveRDS(mymodel, "mymodel.rds")
-#mymodel<-readRDS("mymodel.Rds")
+mymodel<-readRDS("mymodel.Rds")
 
-pred<-predict(mymodel, newdata=train2)
+pred<-predict(mymodel, newdata=train2) #test model on the 2nd partition of the training set (this is Correct here)
+#install.packages('e1071', dependencies=TRUE)
+#library(e1071)
 confusionMatrix(pred, train2$classe)
-# Accuracy of 95.81%. Out-of-sample error rate of 100%-95.91%
+# Accuracy of 96.3% (95% CI: 95.7%, 96.9%)
 
 newpred<-predict(mymodel,newdata=test)
-test$classe<-newpred # 100% correct!
+test$classe<-newpred # 100% correct!<-- this was true when createDataPartion was set to p = 0.6. Unsure at p = 0.8.
+test$classe
+#confusionMatrix(newpred, test$classe)
 
 
 library(rpart); library(rpart.plot)
